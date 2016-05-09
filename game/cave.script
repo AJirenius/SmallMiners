@@ -1,0 +1,68 @@
+local grid = require "game.cave.grid"
+
+go.property("bounds",vmath.vector4())
+
+function set_tile(self, x, y, tile)
+	tilemap.set_tile("#tilemap", "ground", x, y, tile)
+end
+
+function set_resource(self,x,y,resource)
+	if resource == nil or resource < 0 or resource > 2 then return end
+	if resource == 0 then
+		tilemap.set_tile("#tilemap", "resources", x, y, 0)
+	else
+		tilemap.set_tile("#tilemap", "resources", x, y, resource+17)
+	end
+end
+
+function set_stone(self, x, y, bool)
+	local slot = grid.grid[x][y]
+	local slot_below = grid.grid[x][y-1]
+	
+	slot.has_stone = bool
+	local tile = 1
+	if bool == true then 
+		if slot_below and slot_below.has_stone == false then
+			tile = 10
+		else
+			tile = 2 
+		end
+	end
+	--print(tile, bool)
+	set_tile(self, x, y, tile)
+	local slot_above = grid.grid[x][y+1]
+	if slot_above and bool == false and slot_above.has_stone == true then
+		set_tile(self, x, y+1, 10)
+		
+	end
+end
+
+function init(self)
+   local x,y,w,h = tilemap.get_bounds("#tilemap")
+   self.bounds = vmath.vector4(x,y,w,h)
+   grid.create(self.bounds.z, self.bounds.w)
+
+	for x,column in ipairs(grid.grid) do
+		for y, slot in ipairs(column) do
+			set_stone(self,x,y,slot.has_stone)
+			set_resource(self,x,y,slot.resource)
+		end
+	end
+end
+
+function update(self, dt)
+    -- Add update code here
+    -- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("set_stone") then
+   		set_stone(self,message.x, message.y, message.bool)
+   		set_resource(self,message.x, message.y, 0)
+	end
+end
+
+function on_input(self, action_id, action)
+    -- Add input-handling code here
+    -- Remove this function if not needed
+end
