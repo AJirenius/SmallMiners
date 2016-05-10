@@ -1,6 +1,8 @@
 local grid = require "game.cave.grid"
+local miner_path = require "game.miner.miner_path"
+local miners = require "game.miner.miners"
 local config = require "game.config"
-go.property("action_speed", 0.1)
+go.property("action_speed", 0.4)
 go.property("walk_cost",1)
 go.property("dig_cost",3)
 
@@ -10,25 +12,58 @@ local STATE_DIGGING = 3
 local state_strings = {"idle","walking","digging"}
 local prio_weights = config.prio_weights
 
+
+local function print_known_resources(self)
+	print("---------Known resources------------")
+	for i,v in ipairs(self.known_resources) do
+		print(v.grid_pos)
+	end
+	print("----------------------------------")
+end
+
+-- returns bool
+local function already_know_resource(self, slot)
+	for i,v in ipairs(self.known_resources) do
+		if v == slot then return true end
+	end
+	return false
+end
+
 -- will prioritise resources and remember them (to pathfind back to them later on if needed)
 -- otherwise big chance to carry on the same direction 
 -- otherwise randomize route
 local function choose_direction(self)
-	local n = self.current_slot.neighbours
+	if self.state == STATE_DIGGING then
+		return self.direction, self.target_slot
+	end
 	
 	-- add and remember all resources in neighbours
+	local n = self.current_slot.neighbours
 	for k,v in pairs(n) do
-		if v.resources then
+		if v.resource and already_know_resource(self, v) == false then
 			-- put in top of queue 
 			table.insert(self.known_resources, v)
 		end
 	end
 	
-	if #self.known_resources then
+	-- if knowing resources. Pathfind to the last of them
+	if  #self.known_resources > 0 and self.current_path == nil then
 		-- do some pathfinding here on first in queue
+		self.path_target_slot = table.remove(self.known_resources)
+		self.current_path = miner_path.set_path(self, self.path_target_slot)
 	end
 	
-	
+	-- if already have a path. Follow that one.
+	if self.current_path and #self.current_path > 0 then
+		local dir = table.remove(self.current_path)
+		-- End of path. Reset all path tables.
+		if #self.current_path == 0 then 
+			self.current_path = nil 
+			self.path_target_slot = nil
+		end
+		local s = self.current_slot.neighbours[dir]
+		return dir,s
+	end
 	
 	-- IF NO KNOWN RESOURCES. MINE "AIMLESSLY"
 	-- calculate all weights
@@ -43,31 +78,36 @@ local function choose_direction(self)
 		-- prioritize last direction
 		if self.direction == k then
 			v.weight = v.weight + prio_weights.same_direction
-			-- if he just digged, weight it even more.
 			if self.state == STATE_DIGGING then
-				v.weight = v.weight + prio_weights.same_direction * 4
+				-- Always same direction after digging
+				return k,v
 			end
 		end
 		full_weight = full_weight + v.weight
 	end
 	
-	-- randomize action
+	-- randomize action using the weights gained.
+
 	local nr = math.random()*full_weight
 	local full_weight = 0
-	for k,v in pairs(n) do
-		full_weight = full_weight + v.weight
+	for dir,slot in pairs(n) do
+		full_weight = full_weight + slot.weight
 		if nr <= full_weight then 
-			return k,v
+			return dir,slot
 		end
 	end
-	print("error! should have found something:",full_weight)
 end
 
-local function remove_known_resource(slot)
-	for i,v in ipairs(self.known_resources) do
+local function remove_known_resource(self, slot)
+	for i = #self.known_resources, 1,-1 do
+		v = self.known_resources[i]
 		if v == slot then 
 			table.remove(self.known_resources,i)
-			return true
+			if self.path_target_slot == slot then
+				-- miner on it's way to removed slot. Remove path
+				self.path_target_slot = nil
+				self.current_path = nil
+			end
 		end
 	end
 end
@@ -82,15 +122,16 @@ local function set_state(self, state)
 	elseif state == STATE_DIGGING then
 		self.action_steps = self.dig_cost
 	end
-	--print("State:",state_strings[state], self.direction)
 end
 
 -- chooses action and adds to action_steps
 local function next_action(self)
 	local dir, slot = choose_direction(self)
+	assert(dir,"choose_direction must return a valid direction")
+	assert(slot,"choose_direction must return a valid slot")
 	self.direction = dir
 	self.target_slot = slot
-	--print(dir, slot.grid_pos)
+	if slot == nil then return end
 	if slot.has_stone then
 		set_state(self,STATE_DIGGING)
 	else
@@ -100,12 +141,16 @@ end
 
 -- finalize what action started
 local function finalize_action(self)
+	
 	if self.state == STATE_IDLE then
 		-- did nothing.. do nothing.
+	
 	elseif self.state == STATE_WALKING then
 		self.current_slot = self.target_slot
+	
 	elseif self.state == STATE_DIGGING then
 		grid.set_stone(self.target_slot, false)
+		miners.post("miner_removed_stone",{ x = self.target_slot.grid_pos.x, y = self.target_slot.grid_pos.y} )
 	end
 end
 
@@ -118,13 +163,14 @@ local function reduce_action_step(self)
 end
 
 function init(self)
+	math.randomseed(123)
 	msg.post(".", "acquire_input_focus")
     self.action = 0
     self.timer = 0
     self.action_steps = 1
     self.direction = nil
     self.known_resources = {}
-    self.current_pos = vmath.vector3(math.ceil(math.random()*5)+50,math.ceil(math.random()*5)+50,0)
+    self.current_pos = vmath.vector3(math.ceil(math.random()*10)+71,math.ceil(math.random()*10)+51,0)
     self.current_slot = grid.grid[self.current_pos.x][self.current_pos.y]
     grid.set_stone(self.current_slot, false)
     self.target_slot = nil
@@ -132,11 +178,11 @@ function init(self)
     local pos = vmath.vector3(self.current_slot.pos)
     pos.z = 0.1
     go.set_position(pos)
-    print(pos)
+    miners.add()
 end
 
-function update(self, dt)
-    self.timer = self.timer - dt
+function update(self, dt)	
+  	self.timer = self.timer - dt
     while self.timer < 0 do
     	self.timer = self.timer + self.action_speed*1
     	reduce_action_step(self)
@@ -144,15 +190,17 @@ function update(self, dt)
 end
 
 function on_message(self, message_id, message, sender)
-    -- Add message-handling code here
-    -- Remove this function if not needed
+    if message_id == hash("miner_removed_stone") then
+    	local slot = grid.grid[message.x][message.y]
+    	remove_known_resource(self, slot)
+    end
 end
 
 function on_input(self, action_id, action)
     if action_id == hash("warp_time") and action.pressed then
-    	self.timer = self.timer - 10 -- warp 1 min
+    	self.timer = self.timer - self.action_speed -- warp 1 min
     	while self.timer < 0 do
-    		self.timer = self.timer + self.action_speed
+    		self.timer = self.timer + self.action_speed+0.00001
     		reduce_action_step(self)
     	end
     end

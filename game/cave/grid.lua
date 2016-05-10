@@ -8,6 +8,7 @@ SLOT
 		neighbours		table
 		resource		number
 		has_stone		bool
+		fow				number	-- fog of war number between 0 (no fow) - 3 (full fow)
 	}
 	
 
@@ -18,11 +19,25 @@ local M = {}
 
 function M.set_stone(slot,bool)
 	slot.has_stone = bool
+	if slot.has_stone == false then slot.resource = nil end
 	msg.post("/cave","set_stone",{x = slot.grid_pos.x, y = slot.grid_pos.y, bool = bool})
 end
 
+function set_fow(slot)
+	local done = {slot}
+	local next_circle = {}
+	next_circle[slot] = true
+	
+	slot.fow = 0
+	for n = 1,3 do
+		for 		
+	for k,v in pairs(neighbours) do
+		
+	end
+end
+
 local noise_scale = 0.09
-local threshold = 0.8
+local threshold = 0.75 -- 55
 
 function M.create(width,height)
 	simplex.seedP(123431)
@@ -37,21 +52,24 @@ function M.create(width,height)
 				neighbours = {},
 				items = {},
 				has_stone = true,
+				fow = 3,
 			}
+			--[[
+			-- stones?
 			
+				local val = (simplex.Noise2D(x*noise_scale*2.5,y*noise_scale*2.5)+1)/2 -- value 0-1
+    			local tile = math.ceil((val-0.5)/(1-0.5)*2)
+    			if tile > 0 then 
+    				slot.has_stone = false
+    			end
+			--]]
 			-- adding resources
 				local val = (simplex.Noise2D(x*noise_scale,y*noise_scale)+1)/2 -- value 0-1
     			local tile = math.ceil((val-threshold)/(1-threshold)*2)
-    			if tile > 0 then 
+    			if tile > 0 and slot.has_stone == true then 
     				slot.resource = tile
     			end
-			
-			
-			
-			
-			
-			
-			
+
 			table.insert(column, slot)
 		end
 		table.insert(M.grid, column)

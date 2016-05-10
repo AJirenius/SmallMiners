@@ -1,7 +1,7 @@
 function init(self)
 	self.cam = {
-		pos = vmath.vector3(3286.72265625, 3413.2192382812, 0),
-		zoom = 2.8,
+		pos = vmath.vector3(5000.72265625, 3500.2192382812, 0),
+		zoom = 4,
 	}
 
 
