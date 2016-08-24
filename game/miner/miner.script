@@ -184,7 +184,7 @@ end
 function update(self, dt)	
   	self.timer = self.timer - dt
     while self.timer < 0 do
-    	self.timer = self.timer + self.action_speed*1
+    	self.timer = self.timer + self.action_speed*0.2
     	reduce_action_step(self)
     end
 end

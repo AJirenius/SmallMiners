@@ -27,13 +27,14 @@ function set_fow(slot)
 	local done = {slot}
 	local next_circle = {}
 	next_circle[slot] = true
-	
+	--[[
 	slot.fow = 0
 	for n = 1,3 do
-		for 		
-	for k,v in pairs(neighbours) do
+		for kk,vv in pairs(next_circle) do	
+			for k,v in pairs(neighbours) do
 		
-	end
+			end
+		--]]
 end
 
 local noise_scale = 0.09
@@ -52,7 +53,7 @@ function M.create(width,height)
 				neighbours = {},
 				items = {},
 				has_stone = true,
-				fow = 3,
+				--fow = 3,
 			}
 			--[[
 			-- stones?

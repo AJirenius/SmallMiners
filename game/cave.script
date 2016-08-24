@@ -7,7 +7,7 @@ function set_tile(self, x, y, tile)
 end
 
 function set_fow(self,x,y,fow)
-	tilemap.set_tile("#tilemap", "fow", x, y, 6 - fow )
+	--tilemap.set_tile("#tilemap", "fow", x, y, 6 - fow )
 end
 
 function set_resource(self,x,y,resource)
